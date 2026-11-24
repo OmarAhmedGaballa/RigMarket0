@@ -70,6 +70,9 @@ CREATE TABLE IF NOT EXISTS "listings" (
   "updatedAt" timestamp NOT NULL DEFAULT now()
 );
 ALTER TABLE "listings" ADD COLUMN IF NOT EXISTS "stock" integer NOT NULL DEFAULT 1;
+-- Seller's asking price (before commission). Old ads keep their current price as-is, no retroactive commission.
+ALTER TABLE "listings" ADD COLUMN IF NOT EXISTS "sellerPrice" integer;
+UPDATE "listings" SET "sellerPrice" = "price" WHERE "sellerPrice" IS NULL;
 
 CREATE TABLE IF NOT EXISTS "images" (
   "id" text PRIMARY KEY,
@@ -121,6 +124,16 @@ CREATE TABLE IF NOT EXISTS "order_items" (
   "quantity" integer NOT NULL,
   "imageUrl" text
 );
+
+ALTER TABLE "order_items" ADD COLUMN IF NOT EXISTS "sellerUnitPrice" integer;
+UPDATE "order_items" SET "sellerUnitPrice" = "price" WHERE "sellerUnitPrice" IS NULL;
+
+CREATE TABLE IF NOT EXISTS "settings" (
+  "key" text PRIMARY KEY,
+  "value" text NOT NULL,
+  "updatedAt" timestamp NOT NULL DEFAULT now()
+);
+INSERT INTO "settings" ("key","value") VALUES ('commission_rate','1.5') ON CONFLICT ("key") DO NOTHING;
 
 CREATE INDEX IF NOT EXISTS "orders_user_idx" ON "orders" ("userId");
 CREATE INDEX IF NOT EXISTS "order_items_order_idx" ON "order_items" ("orderId");

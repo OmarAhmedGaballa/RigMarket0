@@ -144,6 +144,7 @@ export async function placeOrder(_prev: FormState, formData: FormData): Promise<
             sellerId: row.userId,
             title: row.title,
             price: row.price,
+            sellerUnitPrice: row.sellerPrice ?? row.price,
             quantity: line.qty,
             imageUrl: row.imageUrl,
           }

@@ -50,6 +50,11 @@ export function AdminReviewCard({ listing, sellerName, sellerEmail, sellerPhone,
         </div>
         <div className="flex flex-row items-center justify-between gap-2 sm:flex-col sm:items-end">
           <p className="font-mono text-xl font-semibold text-primary">{price(listing.price)}</p>
+          {listing.sellerPrice !== null && listing.sellerPrice !== listing.price && (
+            <p className="font-mono text-xs text-muted-foreground">
+              {t('au.sellerPrice')}: {price(listing.sellerPrice)}
+            </p>
+          )}
           {listing.status === 'declined' && listing.recommendedPrice && (
             <p className="font-mono text-xs text-muted-foreground">
               {t('admin.suggested', { price: price(listing.recommendedPrice) })}

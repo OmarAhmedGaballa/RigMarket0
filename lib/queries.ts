@@ -1,10 +1,12 @@
 import 'server-only'
-import { and, asc, desc, eq, ilike, inArray, or, sql, getTableColumns } from 'drizzle-orm'
+import { alias } from 'drizzle-orm/pg-core'
+import { and, asc, desc, eq, ilike, inArray, ne, or, sql, getTableColumns } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { images, listings, orderItems, orders, paymentMethods, user } from '@/lib/db/schema'
 
-// Buyers must never receive a seller's phone number, so public queries leave it out.
-const { contactPhone: _hidden, ...publicColumns } = getTableColumns(listings)
+// Buyers must never receive a seller's phone number (or the seller's pre-commission price),
+// so public queries leave them out.
+const { contactPhone: _hidden, sellerPrice: _hiddenSellerPrice, ...publicColumns } = getTableColumns(listings)
 
 export async function getApprovedListings(opts: { category?: string; q?: string; limit?: number } = {}) {
   const filters = [eq(listings.status, 'approved')]
@@ -47,7 +49,7 @@ export async function getListingForAdmin(id: number) {
 
 export async function getListingsForUser(userId: string) {
   return db
-    .select(publicColumns)
+    .select({ ...publicColumns, sellerPrice: listings.sellerPrice })
     .from(listings)
     .where(eq(listings.userId, userId))
     .orderBy(desc(listings.updatedAt))
@@ -157,4 +159,135 @@ export async function getOrdersForAdmin() {
 export async function getImage(id: string) {
   const [row] = await db.select().from(images).where(eq(images.id, id))
   return row ?? null
+}
+
+// --- admin: accounts, sales and totals --------------------------------------
+// Everything below is for admin pages only (it includes phone numbers and other private details).
+
+export type AdminUserRow = {
+  id: string
+  name: string
+  email: string
+  phone: string | null
+  role: string
+  idImageId: string | null
+  createdAt: Date
+  adsCount: number
+  ordersCount: number
+  spent: number
+  soldCount: number
+  soldTotal: number
+}
+
+const activeOrder = sql`o."status" <> 'cancelled'`
+
+export async function getUsersForAdmin(q?: string): Promise<AdminUserRow[]> {
+  const pattern = q ? `%${q.replace(/[%_\\]/g, '\\$&')}%` : null
+  return db
+    .select({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      idImageId: user.idImageId,
+      createdAt: user.createdAt,
+      adsCount: sql<number>`(select count(*)::int from "listings" l where l."userId" = "user"."id")`,
+      ordersCount: sql<number>`(select count(*)::int from "orders" o where o."userId" = "user"."id")`,
+      spent: sql<number>`(select coalesce(sum(o."total"), 0)::int from "orders" o where o."userId" = "user"."id" and ${activeOrder})`,
+      soldCount: sql<number>`(select coalesce(sum(i."quantity"), 0)::int from "order_items" i join "orders" o on o."id" = i."orderId" where i."sellerId" = "user"."id" and ${activeOrder})`,
+      soldTotal: sql<number>`(select coalesce(sum(coalesce(i."sellerUnitPrice", i."price") * i."quantity"), 0)::int from "order_items" i join "orders" o on o."id" = i."orderId" where i."sellerId" = "user"."id" and ${activeOrder})`,
+    })
+    .from(user)
+    .where(
+      pattern
+        ? or(ilike(user.name, pattern), ilike(user.email, pattern), ilike(user.phone, pattern))
+        : undefined,
+    )
+    .orderBy(desc(user.createdAt))
+    .limit(500)
+}
+
+export async function getAdminStats() {
+  const result = await db.execute<{
+    users: number
+    sellers: number
+    ads_live: number
+    ads_pending: number
+    orders: number
+    gross: number
+    seller_net: number
+  }>(sql`
+    select
+      (select count(*)::int from "user") as users,
+      (select count(distinct "userId")::int from "listings") as sellers,
+      (select count(*)::int from "listings" where "status" = 'approved') as ads_live,
+      (select count(*)::int from "listings" where "status" = 'pending') as ads_pending,
+      (select count(*)::int from "orders") as orders,
+      (select coalesce(sum(i."price" * i."quantity"), 0)::bigint from "order_items" i join "orders" o on o."id" = i."orderId" where o."status" <> 'cancelled') as gross,
+      (select coalesce(sum(coalesce(i."sellerUnitPrice", i."price") * i."quantity"), 0)::bigint from "order_items" i join "orders" o on o."id" = i."orderId" where o."status" <> 'cancelled') as seller_net
+  `)
+  const row = result.rows[0]
+  return {
+    users: Number(row.users),
+    sellers: Number(row.sellers),
+    adsLive: Number(row.ads_live),
+    adsPending: Number(row.ads_pending),
+    orders: Number(row.orders),
+    gross: Number(row.gross),
+    sellerNet: Number(row.seller_net),
+    commission: Number(row.gross) - Number(row.seller_net),
+  }
+}
+
+export async function getUserForAdmin(id: string) {
+  const [u] = await db.select().from(user).where(eq(user.id, id))
+  if (!u) return null
+
+  const ads = await db.select().from(listings).where(eq(listings.userId, id)).orderBy(desc(listings.updatedAt))
+  const purchases = await getOrdersForUser(id)
+
+  const buyer = alias(user, 'buyer')
+  const sales = await db
+    .select({
+      item: orderItems,
+      order: orders,
+      buyerName: buyer.name,
+      buyerEmail: buyer.email,
+    })
+    .from(orderItems)
+    .innerJoin(orders, eq(orders.id, orderItems.orderId))
+    .leftJoin(buyer, eq(buyer.id, orders.userId))
+    .where(eq(orderItems.sellerId, id))
+    .orderBy(desc(orders.createdAt))
+    .limit(300)
+
+  return { user: u, ads, purchases, sales }
+}
+
+export type SalesFilter = 'all' | 'active' | 'cancelled'
+
+/** Every item that was bought: who bought it, who sold it, and how the price splits into seller + commission. */
+export async function getSalesForAdmin(filter: SalesFilter = 'all') {
+  const buyer = alias(user, 'buyer')
+  const seller = alias(user, 'seller')
+  return db
+    .select({
+      item: orderItems,
+      order: orders,
+      buyerName: buyer.name,
+      buyerEmail: buyer.email,
+      sellerName: seller.name,
+      sellerEmail: seller.email,
+      sellerPhone: seller.phone,
+    })
+    .from(orderItems)
+    .innerJoin(orders, eq(orders.id, orderItems.orderId))
+    .leftJoin(buyer, eq(buyer.id, orders.userId))
+    .leftJoin(seller, eq(seller.id, orderItems.sellerId))
+    .where(
+      filter === 'cancelled' ? eq(orders.status, 'cancelled') : filter === 'active' ? ne(orders.status, 'cancelled') : undefined,
+    )
+    .orderBy(desc(orders.createdAt), asc(orderItems.id))
+    .limit(500)
 }

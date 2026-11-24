@@ -1,6 +1,6 @@
 'use server'
 
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { db } from '@/lib/db'
@@ -9,6 +9,8 @@ import { getCurrentUser } from '@/lib/session'
 import { getSellerProfile } from '@/lib/queries'
 import { CATEGORIES, CONDITIONS } from '@/lib/categories'
 import { MAX_PRICE, MAX_STOCK } from '@/lib/config'
+import { withCommission } from '@/lib/pricing'
+import { getCommissionRate } from '@/lib/settings'
 import { getI18n } from '@/lib/i18n/server'
 import { deleteImage, hasFile, imageIdFromUrl, imageUrlFor, saveImage } from '@/lib/uploads'
 import { parseIntInRange, text } from '@/lib/validation'
@@ -77,11 +79,15 @@ export async function createListing(_prev: FormState, formData: FormData): Promi
   const saved = await saveImage(photo, { userId: user.id, kind: 'listing' })
   if (!saved.ok) return { error: t(`err.${saved.error}`) }
 
+  // The seller types the price they want. The site commission is added when the ad goes live.
+  const rate = await getCommissionRate()
   await db.insert(listings).values({
     userId: user.id,
     ...values,
+    sellerPrice: values.price,
+    // Admins publish their own ads directly, so the commission is added right away.
+    price: isAdmin ? withCommission(values.price, rate) : values.price,
     imageUrl: imageUrlFor(saved.id),
-    // Admins publish their own ads directly.
     status: isAdmin ? 'approved' : 'pending',
     reviewedAt: isAdmin ? new Date() : null,
   })
@@ -100,7 +106,12 @@ export async function acceptRecommendedPrice(id: number) {
 
   await db
     .update(listings)
-    .set({ price: listing.recommendedPrice, status: 'pending', updatedAt: new Date() })
+    .set({
+      price: listing.recommendedPrice,
+      sellerPrice: listing.recommendedPrice,
+      status: 'pending',
+      updatedAt: new Date(),
+    })
     .where(and(eq(listings.id, id), eq(listings.userId, user.id)))
   revalidateAll()
 }
@@ -115,7 +126,7 @@ export async function resubmitWithPrice(_prev: FormState, formData: FormData): P
 
   const result = await db
     .update(listings)
-    .set({ price, status: 'pending', updatedAt: new Date() })
+    .set({ price, sellerPrice: price, status: 'pending', updatedAt: new Date() })
     .where(and(eq(listings.id, id), eq(listings.userId, user.id), eq(listings.status, 'declined')))
     .returning({ id: listings.id })
   if (result.length === 0) return { error: t('err.resubmit') }
@@ -138,9 +149,22 @@ export async function deleteListing(id: number) {
 
 export async function approveListing(id: number) {
   await getAdminOrThrow()
+  const [existing] = await db.select().from(listings).where(eq(listings.id, id))
+  if (!existing) return
+  // The ad goes live now: the public price is the seller's price plus the current commission.
+  const sellerPrice = existing.sellerPrice ?? existing.price
+  const rate = await getCommissionRate()
   await db
     .update(listings)
-    .set({ status: 'approved', adminNote: null, recommendedPrice: null, reviewedAt: new Date(), updatedAt: new Date() })
+    .set({
+      status: 'approved',
+      sellerPrice,
+      price: withCommission(sellerPrice, rate),
+      adminNote: null,
+      recommendedPrice: null,
+      reviewedAt: new Date(),
+      updatedAt: new Date(),
+    })
     .where(eq(listings.id, id))
   revalidateAll()
 }
@@ -161,6 +185,8 @@ export async function declineListing(_prev: FormState, formData: FormData): Prom
     .update(listings)
     .set({
       status: 'declined',
+      // Taken off the shop: go back to the seller's own price (no commission until it goes live again).
+      price: sql`coalesce(${listings.sellerPrice}, ${listings.price})`,
       recommendedPrice,
       adminNote: adminNote || null,
       reviewedAt: new Date(),
@@ -209,10 +235,24 @@ export async function adminUpdateListing(_prev: FormState, formData: FormData): 
     imageUrl = null
   }
 
+  // In the admin form the price field is the seller's price. Commission is (re)applied only when the ad is
+  // live AND either the seller's price changed or the ad is just going live, so saving other edits never
+  // changes an existing public price.
+  const { price: newSellerPrice, ...otherValues } = values
+  const oldSellerPrice = existing.sellerPrice ?? existing.price
+  let price = existing.price
+  if (status !== 'approved') {
+    price = newSellerPrice
+  } else if (existing.status !== 'approved' || newSellerPrice !== oldSellerPrice) {
+    price = withCommission(newSellerPrice, await getCommissionRate())
+  }
+
   await db
     .update(listings)
     .set({
-      ...values,
+      ...otherValues,
+      price,
+      sellerPrice: newSellerPrice,
       imageUrl,
       status,
       adminNote: adminNote || null,

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ChevronLeft, MapPin, PackageCheck, User } from 'lucide-react'
+import { ChevronLeft, MapPin, User } from 'lucide-react'
 import { getListingWithSeller } from '@/lib/queries'
 import { getCurrentUser } from '@/lib/session'
 import { categoryName, conditionLabel, getCategory } from '@/lib/categories'
@@ -85,14 +85,6 @@ export default async function ListingDetailPage({ params }: { params: Promise<{ 
               </div>
             </div>
           )}
-
-          <div className="flex items-start gap-3 rounded-xl border bg-card p-4">
-            <PackageCheck className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
-            <div className="text-sm">
-              <p className="font-medium">{t('detail.storeNote.title')}</p>
-              <p className="text-muted-foreground">{t('detail.storeNote.text')}</p>
-            </div>
-          </div>
 
           {/* The seller's phone number is deliberately not part of this page's data. */}
           <dl className="grid gap-3 rounded-xl border bg-card p-4 text-sm">

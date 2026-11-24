@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { ChevronLeft } from 'lucide-react'
 import { requireAdmin } from '@/lib/session'
 import { getListingForAdmin } from '@/lib/queries'
+import { getCommissionRate } from '@/lib/settings'
 import { getI18n } from '@/lib/i18n/server'
 import { ListingForm } from '@/components/listing-form'
 
@@ -17,7 +18,7 @@ export default async function AdminEditListingPage({ params }: { params: Promise
   const { id } = await params
   const numericId = Number(id)
   if (!Number.isInteger(numericId)) notFound()
-  const [{ t }, listing] = await Promise.all([getI18n(), getListingForAdmin(numericId)])
+  const [{ t }, listing, commissionRate] = await Promise.all([getI18n(), getListingForAdmin(numericId), getCommissionRate()])
   if (!listing) notFound()
 
   return (
@@ -27,7 +28,7 @@ export default async function AdminEditListingPage({ params }: { params: Promise
         {t('admin.edit.back')}
       </Link>
       <h1 className="mt-4 text-2xl font-semibold tracking-tight">{t('admin.edit.title')}</h1>
-      <ListingForm mode="admin-edit" listing={listing} />
+      <ListingForm mode="admin-edit" listing={listing} commissionRate={commissionRate} />
     </div>
   )
 }

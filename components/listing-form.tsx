@@ -1,9 +1,11 @@
 'use client'
 
+import { useState } from 'react'
 import { adminUpdateListing, createListing } from '@/app/actions/listings'
 import type { Listing } from '@/lib/db/schema'
 import { CATEGORIES, CATEGORY_GROUPS, CONDITIONS, categoryName, groupName } from '@/lib/categories'
 import { CURRENCY, MAX_STOCK } from '@/lib/config'
+import { formatRate, withCommission } from '@/lib/pricing'
 import { useFormAction } from '@/lib/use-form-action'
 import { useI18n } from '@/components/i18n-provider'
 import { ImageInput } from '@/components/image-input'
@@ -15,13 +17,22 @@ import { Textarea } from '@/components/ui/textarea'
 const selectClass =
   'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 [&>option]:bg-card [&>optgroup]:bg-card'
 
-type Props =
+type Props = { commissionRate: number } & (
   | { mode: 'create'; listing?: undefined }
   | { mode: 'admin-edit'; listing: Listing }
+)
 
-export function ListingForm({ mode, listing }: Props) {
-  const { t, locale } = useI18n()
+export function ListingForm({ mode, listing, commissionRate }: Props) {
+  const { t, locale, price: formatMoney } = useI18n()
   const isEdit = mode === 'admin-edit'
+  // The price field is what the seller wants to receive. The commission is added automatically when the ad goes live.
+  const initialPrice = listing ? (listing.sellerPrice ?? listing.price) : null
+  const [priceInput, setPriceInput] = useState(initialPrice === null ? '' : String(initialPrice))
+  const typedPrice = Number(priceInput)
+  const unchanged = isEdit && typedPrice === initialPrice
+  const showCurrent = unchanged && listing?.status === 'approved'
+  const previewPrice =
+    Number.isInteger(typedPrice) && typedPrice > 0 ? (showCurrent ? listing!.price : withCommission(typedPrice, commissionRate)) : null
   const { state, onSubmit, pending } = useFormAction(isEdit ? adminUpdateListing : createListing)
 
   return (
@@ -77,7 +88,14 @@ export function ListingForm({ mode, listing }: Props) {
           <Input id="brand" name="brand" maxLength={60} defaultValue={listing?.brand ?? ''} placeholder={t('form.brandPh')} />
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="price">{t('form.price', { currency: CURRENCY })}</Label>
+          <div className="flex items-center justify-between gap-2">
+            <Label htmlFor="price">{t('form.price', { currency: CURRENCY })}</Label>
+            {commissionRate > 0 && (
+              <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 font-mono text-xs font-medium text-primary">
+                {t('form.commissionBadge', { rate: formatRate(commissionRate) })}
+              </span>
+            )}
+          </div>
           <Input
             id="price"
             name="price"
@@ -86,9 +104,23 @@ export function ListingForm({ mode, listing }: Props) {
             min={1}
             step={1}
             required
-            defaultValue={listing?.price}
+            value={priceInput}
+            onChange={(e) => setPriceInput(e.target.value)}
             placeholder={t('form.pricePh')}
           />
+          {commissionRate > 0 && (
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {t('form.commissionNote', { rate: formatRate(commissionRate) })}
+              {previewPrice !== null && (
+                <>
+                  {' '}
+                  <span className="font-medium text-foreground">
+                    {t(showCurrent ? 'form.currentPublicPrice' : 'form.publicPricePreview', { price: formatMoney(previewPrice) })}
+                  </span>
+                </>
+              )}
+            </p>
+          )}
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="stock">{t('form.stock')}</Label>

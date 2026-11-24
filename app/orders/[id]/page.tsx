@@ -60,7 +60,7 @@ export default async function OrderPage({
           {order.items.map((i) => (
             <li key={i.id} className="flex items-center gap-3">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={i.imageUrl || '/images/cat-parts.png'} alt="" className="size-14 shrink-0 rounded-lg border object-cover" />
+              <img src={i.imageUrl || '/images/cat-motherboards.png'} alt="" className="size-14 shrink-0 rounded-lg border object-cover" />
               <div className="min-w-0 flex-1">
                 <p className="line-clamp-2 text-sm font-medium">{i.title}</p>
                 <p className="text-xs text-muted-foreground">{t('orders.qty', { n: i.quantity })}</p>

@@ -73,7 +73,10 @@ export const listings = pgTable('listings', {
   category: text('category').notNull(),
   brand: text('brand'),
   condition: text('condition').notNull().default('used'),
+  // Public price: what buyers pay. Once an ad is live this is sellerPrice + the site commission.
   price: integer('price').notNull(),
+  // What the seller asked for (before commission). Null on old ads = same as price.
+  sellerPrice: integer('sellerPrice'),
   stock: integer('stock').notNull().default(1),
   imageUrl: text('imageUrl'),
   location: text('location'),
@@ -139,11 +142,22 @@ export const orderItems = pgTable('order_items', {
   title: text('title').notNull(),
   price: integer('price').notNull(),
   quantity: integer('quantity').notNull(),
+  // What the seller gets per unit (price minus commission). Null on old orders = same as price.
+  sellerUnitPrice: integer('sellerUnitPrice'),
   imageUrl: text('imageUrl'),
 })
 
+/** Simple key/value store for site-wide settings the admin can change (e.g. the commission rate). */
+export const settings = pgTable('settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+})
+
 export type Listing = typeof listings.$inferSelect
-export type PublicListing = Omit<Listing, 'contactPhone'>
+export type PublicListing = Omit<Listing, 'contactPhone' | 'sellerPrice'>
+/** What a seller sees on their own dashboard: public fields plus their own asking price. */
+export type SellerListing = PublicListing & { sellerPrice: number | null }
 export type ListingStatus = 'pending' | 'approved' | 'declined'
 export type PaymentMethod = typeof paymentMethods.$inferSelect
 export type Order = typeof orders.$inferSelect

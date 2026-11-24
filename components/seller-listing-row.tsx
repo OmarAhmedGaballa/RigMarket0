@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useActionState, useTransition } from 'react'
 import { Lightbulb, Trash2 } from 'lucide-react'
-import type { PublicListing } from '@/lib/db/schema'
+import type { SellerListing } from '@/lib/db/schema'
 import { acceptRecommendedPrice, deleteListing, resubmitWithPrice } from '@/app/actions/listings'
 import { categoryName, getCategory } from '@/lib/categories'
 import { CURRENCY } from '@/lib/config'
@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
-export function SellerListingRow({ listing }: { listing: PublicListing }) {
+export function SellerListingRow({ listing }: { listing: SellerListing }) {
   const { t, locale, price } = useI18n()
   const [pending, startTransition] = useTransition()
   const [state, resubmit, resubmitting] = useActionState(resubmitWithPrice, undefined)
@@ -33,8 +33,13 @@ export function SellerListingRow({ listing }: { listing: PublicListing }) {
           {listing.title}
         </Link>
         <p className="font-mono text-sm">
-          {t('dash.yourPrice')} <span className="font-semibold">{price(listing.price)}</span>
+          {t('dash.yourPrice')} <span className="font-semibold">{price(listing.sellerPrice ?? listing.price)}</span>
         </p>
+        {listing.status === 'approved' && listing.sellerPrice !== null && listing.price !== listing.sellerPrice && (
+          <p className="text-xs text-muted-foreground">
+            {t('dash.publicPrice', { price: price(listing.price) })}
+          </p>
+        )}
 
         {listing.status === 'declined' && (
           <div className="mt-2 flex flex-col gap-3 rounded-lg border border-destructive/25 bg-destructive/5 p-3">
@@ -75,7 +80,7 @@ export function SellerListingRow({ listing }: { listing: PublicListing }) {
                   min={1}
                   step={1}
                   required
-                  defaultValue={listing.recommendedPrice ?? listing.price}
+                  defaultValue={listing.recommendedPrice ?? listing.sellerPrice ?? listing.price}
                   className="w-32"
                 />
               </div>

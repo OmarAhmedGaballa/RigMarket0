@@ -64,7 +64,7 @@ export function AdminOrderCard({ order, items }: Props) {
         {items.map(({ item, sellerName, sellerPhone }) => (
           <li key={item.id} className="flex items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={item.imageUrl || '/images/cat-parts.png'} alt="" className="size-12 shrink-0 rounded-lg border object-cover" />
+            <img src={item.imageUrl || '/images/cat-motherboards.png'} alt="" className="size-12 shrink-0 rounded-lg border object-cover" />
             <div className="min-w-0 flex-1">
               <p className="line-clamp-1 text-sm font-medium">{item.title}</p>
               <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
