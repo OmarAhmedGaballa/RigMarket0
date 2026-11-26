@@ -18,7 +18,7 @@ export function useCartSync() {
     setChecking(true)
     refreshCart(ids)
       .then((fresh) => {
-        if (cancelled) return
+        if (cancelled || !fresh || fresh.length === 0) return
         sync(
           fresh.map((f) => ({
             id: f.id,
@@ -26,7 +26,7 @@ export function useCartSync() {
             price: f.price,
             stock: f.stock,
             image: resolveImage(f),
-          })),
+          }))
         )
       })
       .catch(() => {})
