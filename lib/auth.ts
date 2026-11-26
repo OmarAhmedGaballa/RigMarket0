@@ -30,11 +30,40 @@ export const auth = betterAuth({
     ...(process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET
       ? {
           facebook: {
-            clientId: process.env.FACEBOOK_APP_ID,
-            clientSecret: process.env.FACEBOOK_APP_SECRET,
-            // Facebook already verified the identity, so no email code is needed.
-            mapProfileToUser: () => ({ emailVerified: true }),
-          },
+  clientId: process.env.FACEBOOK_APP_ID!,
+  clientSecret: process.env.FACEBOOK_APP_SECRET!,
+  mapProfileToUser: (profile) => {
+    const p = profile as unknown as Record<string, unknown>;
+    const rawId = p?.id ?? p?.sub;
+    const fbId = typeof rawId === "string" || typeof rawId === "number"
+      ? String(rawId)
+      : `${Date.now()}`;
+
+    const rawEmail = typeof p?.email === "string" ? p.email.trim() : "";
+    const email = rawEmail.length > 0 ? rawEmail : `fb_${fbId}@rigmarket.local`;
+
+    const rawName = typeof p?.name === "string" ? p.name.trim() : "";
+    const name = rawName.length > 0 ? rawName : "Facebook User";
+
+    const pictureObj =
+      p?.picture && typeof p.picture === "object"
+        ? (p.picture as { data?: { url?: unknown } })
+        : undefined;
+    const image =
+      typeof p?.picture === "string"
+        ? p.picture
+        : typeof pictureObj?.data?.url === "string"
+          ? pictureObj.data.url
+          : undefined;
+
+    return {
+      email,
+      name,
+      image,
+      emailVerified: true,
+    };
+  },
+},
         }
       : {}),
   },
