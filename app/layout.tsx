@@ -71,7 +71,7 @@ export default async function RootLayout({
               <main className="flex-1">{children}</main>
               <SiteFooter />
               <WhatsAppButton />
-              <Toaster dir={dir} position="top-center" />
+              <Toaster dir={dir === 'rtl' ? 'rtl' : 'ltr'} position="top-center" />
             </CartProvider>
           </I18nProvider>
         </ThemeProvider>
