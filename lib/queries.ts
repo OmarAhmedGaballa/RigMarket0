@@ -6,7 +6,8 @@ import { images, listings, orderItems, orders, paymentMethods, user } from '@/li
 
 // Buyers must never receive a seller's phone number (or the seller's pre-commission price),
 // so public queries leave them out.
-const { contactPhone: _hidden, sellerPrice: _hiddenSellerPrice, ...publicColumns } = getTableColumns(listings)
+const { contactPhone: _hidden, sellerPrice: _hiddenSellerPrice, originalSellerPrice: _hiddenOriginalSeller, ...publicColumns } =
+  getTableColumns(listings)
 
 export async function getApprovedListings(opts: { category?: string; q?: string; limit?: number } = {}) {
   const filters = [eq(listings.status, 'approved')]
@@ -49,7 +50,7 @@ export async function getListingForAdmin(id: number) {
 
 export async function getListingsForUser(userId: string) {
   return db
-    .select({ ...publicColumns, sellerPrice: listings.sellerPrice })
+    .select({ ...publicColumns, sellerPrice: listings.sellerPrice, originalSellerPrice: listings.originalSellerPrice })
     .from(listings)
     .where(eq(listings.userId, userId))
     .orderBy(desc(listings.updatedAt))
@@ -170,6 +171,7 @@ export type AdminUserRow = {
   email: string
   phone: string | null
   role: string
+  isOwner: boolean
   idImageId: string | null
   createdAt: Date
   adsCount: number
@@ -190,6 +192,7 @@ export async function getUsersForAdmin(q?: string): Promise<AdminUserRow[]> {
       email: user.email,
       phone: user.phone,
       role: user.role,
+      isOwner: user.isOwner,
       idImageId: user.idImageId,
       createdAt: user.createdAt,
       adsCount: sql<number>`(select count(*)::int from "listings" l where l."userId" = "user"."id")`,

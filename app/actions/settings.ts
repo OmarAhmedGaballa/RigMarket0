@@ -34,6 +34,7 @@ export async function saveCommission(_prev: FormState, formData: FormData): Prom
       .set({
         price: sql`least(round(coalesce(${listings.sellerPrice}, ${listings.price}) * ${factor}::numeric)::int, ${MAX_PRICE})`,
         sellerPrice: sql`coalesce(${listings.sellerPrice}, ${listings.price})`,
+        originalPrice: sql`case when ${listings.originalSellerPrice} is null then null else least(round(${listings.originalSellerPrice} * ${factor}::numeric)::int, ${MAX_PRICE}) end`,
         updatedAt: new Date(),
       })
       .where(eq(listings.status, 'approved'))

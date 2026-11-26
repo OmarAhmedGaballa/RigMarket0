@@ -147,3 +147,37 @@ INSERT INTO "payment_methods" ("code","nameEn","nameAr","instructionsEn","instru
  ('instapay','InstaPay','إنستا باي','Send the order total to the InstaPay address shown below, then enter the transaction reference.','حوّل إجمالي الطلب إلى عنوان إنستا باي الموضح أدناه، ثم اكتب رقم العملية المرجعي.',true,true,3),
  ('bank-transfer','Bank transfer','تحويل بنكي','Transfer the order total to the bank account shown below, then enter the transfer reference.','حوّل إجمالي الطلب إلى الحساب البنكي الموضح أدناه، ثم اكتب رقم التحويل المرجعي.',true,false,4)
 ON CONFLICT ("code") DO NOTHING;
+
+-- ===== Update: discounts, primary admin, email verification codes =====
+
+-- Discounts: when set, the ad is on sale. originalSellerPrice = the seller's price before the discount,
+-- originalPrice = the public (with commission) price before the discount, shown struck through.
+ALTER TABLE "listings" ADD COLUMN IF NOT EXISTS "originalSellerPrice" integer;
+ALTER TABLE "listings" ADD COLUMN IF NOT EXISTS "originalPrice" integer;
+
+-- Primary admin ("owner"): the only admin who can promote accounts to admin.
+-- The first (oldest) admin that exists today becomes the owner. Safe to run again: it only runs if there is no owner yet.
+ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "isOwner" boolean NOT NULL DEFAULT false;
+UPDATE "user" SET "isOwner" = true
+WHERE "id" = (SELECT "id" FROM "user" WHERE "role" = 'admin' ORDER BY "createdAt" ASC LIMIT 1)
+  AND NOT EXISTS (SELECT 1 FROM "user" WHERE "isOwner" = true);
+
+-- Accounts that already exist were created before verification existed: do not lock them out.
+-- (Only runs once, the first time this table is created.)
+DO $$
+BEGIN
+  IF to_regclass('public.email_codes') IS NULL THEN
+    UPDATE "user" SET "emailVerified" = true WHERE "emailVerified" = false;
+  END IF;
+END $$;
+
+-- One-time email verification codes (stored hashed, never in clear text).
+CREATE TABLE IF NOT EXISTS "email_codes" (
+  "email" text PRIMARY KEY,
+  "codeHash" text NOT NULL,
+  "expiresAt" timestamp NOT NULL,
+  "attempts" integer NOT NULL DEFAULT 0,
+  "sentAt" timestamp NOT NULL DEFAULT now(),
+  "windowStart" timestamp NOT NULL DEFAULT now(),
+  "sentInWindow" integer NOT NULL DEFAULT 1
+);

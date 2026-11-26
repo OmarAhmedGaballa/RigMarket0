@@ -21,3 +21,6 @@ export const MAX_QTY_PER_LINE = 99
 /** Uploads are stored in the database; keep them small. */
 export const MAX_UPLOAD_BYTES = 4 * 1024 * 1024
 export const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
+
+/** Customer service + legal contact email. Shown on /privacy, /terms and /data-deletion. */
+export const SUPPORT_EMAIL = 'rigmarket0@gmail.com'

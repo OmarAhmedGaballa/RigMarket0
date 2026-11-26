@@ -1,0 +1,2 @@
+export const ANNOUNCEMENT_HOURS = 24
+export const ANNOUNCEMENT_MAX_LENGTH = 400

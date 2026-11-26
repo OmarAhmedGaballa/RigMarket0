@@ -1,9 +1,10 @@
 'use server'
 
 import { and, eq } from 'drizzle-orm'
+import { revalidatePath } from 'next/cache'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { account, session } from '@/lib/db/schema'
+import { account, session, user } from '@/lib/db/schema'
 import { getCurrentUser } from '@/lib/session'
 import { getI18n } from '@/lib/i18n/server'
 import type { FormState } from './listings'
@@ -24,6 +25,11 @@ export async function adminResetPassword(_prev: FormState, formData: FormData): 
     return { error: t('err.newPassword') }
   }
 
+  // A promoted admin must never be able to take over the primary admin (or another admin) by resetting their password.
+  const [target] = await db.select({ role: user.role }).from(user).where(eq(user.id, userId))
+  if (!target) return { error: t('err.invalid') }
+  if (target.role === 'admin' && userId !== admin.id && !admin.isOwner) return { error: t('ro.errPwAdmin') }
+
   try {
     const ctx = await auth.$context
     const hash = await ctx.password.hash(password)
@@ -40,4 +46,32 @@ export async function adminResetPassword(_prev: FormState, formData: FormData): 
     return { error: t('err.generic') }
   }
   return { success: t('au.pwSaved') }
+}
+
+/**
+ * Promote / demote an account.
+ * ONLY the primary admin (the owner) can do this. Admins that the owner promoted cannot promote anyone,
+ * and the owner account itself can never be demoted. The check reads the database, not the session.
+ */
+export async function setAccountRole(_prev: FormState, formData: FormData): Promise<FormState> {
+  const { t } = await getI18n()
+  const current = await getCurrentUser()
+  if (!current) return { error: t('err.unauthorized') }
+
+  const [me] = await db.select({ role: user.role, isOwner: user.isOwner }).from(user).where(eq(user.id, current.id))
+  if (!me || me.role !== 'admin' || !me.isOwner) return { error: t('ro.errOwnerOnly') }
+
+  const targetId = formData.get('id')
+  const role = formData.get('role')
+  if (typeof targetId !== 'string' || !targetId || (role !== 'admin' && role !== 'user')) return { error: t('err.invalid') }
+
+  const [target] = await db.select({ isOwner: user.isOwner }).from(user).where(eq(user.id, targetId))
+  if (!target) return { error: t('err.invalid') }
+  if (target.isOwner) return { error: t('ro.errOwner') }
+
+  await db.update(user).set({ role, updatedAt: new Date() }).where(eq(user.id, targetId))
+  // Role changed: make them sign in again so the new role applies everywhere right away.
+  await db.delete(session).where(eq(session.userId, targetId))
+  revalidatePath('/admin/users', 'layout')
+  return { success: role === 'admin' ? t('ro.madeAdmin') : t('ro.madeUser') }
 }

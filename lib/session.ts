@@ -11,6 +11,7 @@ export async function getCurrentUser() {
     name: session.user.name,
     email: session.user.email,
     role: (session.user as { role?: string }).role ?? 'user',
+    isOwner: Boolean((session.user as { isOwner?: boolean }).isOwner),
   }
 }
 

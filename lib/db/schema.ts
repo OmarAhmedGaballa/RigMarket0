@@ -16,6 +16,8 @@ export const user = pgTable('user', {
   emailVerified: boolean('emailVerified').notNull().default(false),
   image: text('image'),
   role: text('role').notNull().default('user'),
+  // The primary admin. Only the owner can promote other accounts to admin.
+  isOwner: boolean('isOwner').notNull().default(false),
   // Seller verification. Private: only the admin ever sees these.
   phone: text('phone'),
   idImageId: text('idImageId'),
@@ -77,6 +79,9 @@ export const listings = pgTable('listings', {
   price: integer('price').notNull(),
   // What the seller asked for (before commission). Null on old ads = same as price.
   sellerPrice: integer('sellerPrice'),
+  // Discount info (null = no discount). Seller can only lower the price.
+  originalSellerPrice: integer('originalSellerPrice'),
+  originalPrice: integer('originalPrice'),
   stock: integer('stock').notNull().default(1),
   imageUrl: text('imageUrl'),
   location: text('location'),
@@ -154,10 +159,21 @@ export const settings = pgTable('settings', {
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 })
 
+/** One-time email verification codes (hashed). */
+export const emailCodes = pgTable('email_codes', {
+  email: text('email').primaryKey(),
+  codeHash: text('codeHash').notNull(),
+  expiresAt: timestamp('expiresAt').notNull(),
+  attempts: integer('attempts').notNull().default(0),
+  sentAt: timestamp('sentAt').notNull().defaultNow(),
+  windowStart: timestamp('windowStart').notNull().defaultNow(),
+  sentInWindow: integer('sentInWindow').notNull().default(1),
+})
+
 export type Listing = typeof listings.$inferSelect
-export type PublicListing = Omit<Listing, 'contactPhone' | 'sellerPrice'>
+export type PublicListing = Omit<Listing, 'contactPhone' | 'sellerPrice' | 'originalSellerPrice'>
 /** What a seller sees on their own dashboard: public fields plus their own asking price. */
-export type SellerListing = PublicListing & { sellerPrice: number | null }
+export type SellerListing = PublicListing & { sellerPrice: number | null; originalSellerPrice: number | null }
 export type ListingStatus = 'pending' | 'approved' | 'declined'
 export type PaymentMethod = typeof paymentMethods.$inferSelect
 export type Order = typeof orders.$inferSelect

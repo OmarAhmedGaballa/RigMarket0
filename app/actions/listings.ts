@@ -109,6 +109,8 @@ export async function acceptRecommendedPrice(id: number) {
     .set({
       price: listing.recommendedPrice,
       sellerPrice: listing.recommendedPrice,
+      originalSellerPrice: null,
+      originalPrice: null,
       status: 'pending',
       updatedAt: new Date(),
     })
@@ -126,13 +128,94 @@ export async function resubmitWithPrice(_prev: FormState, formData: FormData): P
 
   const result = await db
     .update(listings)
-    .set({ price, sellerPrice: price, status: 'pending', updatedAt: new Date() })
+    .set({ price, sellerPrice: price, originalSellerPrice: null, originalPrice: null, status: 'pending', updatedAt: new Date() })
     .where(and(eq(listings.id, id), eq(listings.userId, user.id), eq(listings.status, 'declined')))
     .returning({ id: listings.id })
   if (result.length === 0) return { error: t('err.resubmit') }
 
   revalidateAll()
   return { success: t('ok.resubmitted') }
+}
+
+/** Seller: change how many pieces are in stock. 0 = sold out. */
+export async function updateStock(_prev: FormState, formData: FormData): Promise<FormState> {
+  const user = await getCurrentUser()
+  const { t } = await getI18n()
+  if (!user) return { error: t('err.signIn') }
+  const id = Number(formData.get('id'))
+  const stock = parseIntInRange(formData.get('stock'), 0, MAX_STOCK)
+  if (!Number.isInteger(id)) return { error: t('err.invalid') }
+  if (stock === null) return { error: t('err.stock0', { max: MAX_STOCK }) }
+
+  const res = await db
+    .update(listings)
+    .set({ stock, updatedAt: new Date() })
+    .where(and(eq(listings.id, id), eq(listings.userId, user.id)))
+    .returning({ id: listings.id })
+  if (res.length === 0) return { error: t('err.invalid') }
+  revalidateAll()
+  return { success: stock === 0 ? t('ok.soldOut') : t('ok.stockSaved') }
+}
+
+/** Seller: put the ad on sale. The new price must be LOWER than the current one: raising is never allowed. */
+export async function setDiscount(_prev: FormState, formData: FormData): Promise<FormState> {
+  const user = await getCurrentUser()
+  const { t } = await getI18n()
+  if (!user) return { error: t('err.signIn') }
+  const id = Number(formData.get('id'))
+  const newSellerPrice = parseIntInRange(formData.get('price'), 1, MAX_PRICE)
+  if (!Number.isInteger(id)) return { error: t('err.invalid') }
+  if (newSellerPrice === null) return { error: t('err.price', { max: MAX_PRICE }) }
+
+  const [listing] = await db
+    .select()
+    .from(listings)
+    .where(and(eq(listings.id, id), eq(listings.userId, user.id), eq(listings.status, 'approved')))
+  if (!listing) return { error: t('err.discountLive') }
+
+  const currentSellerPrice = listing.sellerPrice ?? listing.price
+  if (newSellerPrice >= currentSellerPrice) return { error: t('err.discountLower') }
+
+  // Public price = new seller price + commission, but never higher than what buyers see today.
+  const rate = await getCommissionRate()
+  const publicPrice = Math.max(1, Math.min(withCommission(newSellerPrice, rate), listing.price - 1))
+
+  const res = await db
+    .update(listings)
+    .set({
+      sellerPrice: newSellerPrice,
+      price: publicPrice,
+      originalSellerPrice: listing.originalSellerPrice ?? currentSellerPrice,
+      originalPrice: listing.originalPrice ?? listing.price,
+      updatedAt: new Date(),
+    })
+    // Re-check the price in the WHERE so a double click or a second tab can never raise it.
+    .where(and(eq(listings.id, id), eq(listings.userId, user.id), eq(listings.status, 'approved'), eq(listings.price, listing.price)))
+    .returning({ id: listings.id })
+  if (res.length === 0) return { error: t('err.generic') }
+  revalidateAll()
+  return { success: t('ok.discountSaved') }
+}
+
+/** Seller: end the sale and go back to the price the ad had before the discount (never above it). */
+export async function removeDiscount(id: number) {
+  const user = await getUserOrThrow()
+  const [listing] = await db
+    .select()
+    .from(listings)
+    .where(and(eq(listings.id, id), eq(listings.userId, user.id), eq(listings.status, 'approved')))
+  if (!listing || listing.originalSellerPrice === null || listing.originalPrice === null) return
+  await db
+    .update(listings)
+    .set({
+      sellerPrice: listing.originalSellerPrice,
+      price: listing.originalPrice,
+      originalSellerPrice: null,
+      originalPrice: null,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(listings.id, id), eq(listings.userId, user.id)))
+  revalidateAll()
 }
 
 export async function deleteListing(id: number) {
@@ -187,6 +270,8 @@ export async function declineListing(_prev: FormState, formData: FormData): Prom
       status: 'declined',
       // Taken off the shop: go back to the seller's own price (no commission until it goes live again).
       price: sql`coalesce(${listings.sellerPrice}, ${listings.price})`,
+      originalSellerPrice: null,
+      originalPrice: null,
       recommendedPrice,
       adminNote: adminNote || null,
       reviewedAt: new Date(),
@@ -253,6 +338,8 @@ export async function adminUpdateListing(_prev: FormState, formData: FormData): 
       ...otherValues,
       price,
       sellerPrice: newSellerPrice,
+      // If the admin sets a different price, any seller discount no longer applies.
+      ...(status !== 'approved' || newSellerPrice !== oldSellerPrice ? { originalSellerPrice: null, originalPrice: null } : {}),
       imageUrl,
       status,
       adminNote: adminNote || null,

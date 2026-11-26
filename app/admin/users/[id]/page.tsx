@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ChevronLeft } from 'lucide-react'
 import { requireAdmin } from '@/lib/session'
+import { RoleForm } from '@/components/role-form'
 import { getUserForAdmin } from '@/lib/queries'
 import { categoryName, getCategory } from '@/lib/categories'
 import { formatDate, formatPrice } from '@/lib/i18n'
@@ -38,7 +39,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export default async function AdminUserPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireAdmin()
+  const me = await requireAdmin()
   const { id } = await params
   const [{ t, locale }, data] = await Promise.all([getI18n(), getUserForAdmin(id)])
   if (!data) notFound()
@@ -67,7 +68,9 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
               {u.phone ? <bdi dir="ltr" className="font-mono select-all">{u.phone}</bdi> : <span className="text-muted-foreground">{t('au.noPhone')}</span>}
             </Field>
             <Field label={t('au.joined')}>{formatDate(u.createdAt, locale)}</Field>
-            <Field label={t('au.role.user')}>{t(u.role === 'admin' ? 'au.role.admin' : 'au.role.user')}</Field>
+            <Field label={t('au.role')}>
+              {u.isOwner ? t('ro.owner') : t(u.role === 'admin' ? 'au.role.admin' : 'au.role.user')}
+            </Field>
             <Field label={t('au.viewId')}>
               {u.idImageId ? (
                 <a href={`/api/images/${u.idImageId}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
@@ -96,6 +99,20 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
           <p className="mt-1 text-xs text-muted-foreground">{t('au.pwHidden')}</p>
           <p className="mt-3 mb-3 text-xs text-muted-foreground">{t('au.pwNote')}</p>
           <ResetPasswordForm userId={u.id} />
+        </section>
+
+        <section className="rounded-xl border bg-card p-5 md:col-span-2">
+          <h2 className="mb-1 font-medium">{t('ro.title')}</h2>
+          {u.isOwner ? (
+            <p className="text-sm text-muted-foreground">{t('ro.ownerNote')}</p>
+          ) : me.isOwner ? (
+            <>
+              <p className="mb-3 text-sm text-muted-foreground">{u.role === 'admin' ? t('ro.isAdminNote') : t('ro.isMemberNote')}</p>
+              <RoleForm userId={u.id} isAdmin={u.role === 'admin'} />
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">{t('ro.onlyOwner')}</p>
+          )}
         </section>
       </div>
 

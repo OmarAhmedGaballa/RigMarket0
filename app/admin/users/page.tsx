@@ -61,7 +61,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                           (u.role === 'admin' ? 'border-primary/30 bg-primary/10 text-primary' : 'bg-muted text-muted-foreground')
                         }
                       >
-                        {t(u.role === 'admin' ? 'au.role.admin' : 'au.role.user')}
+                        {u.isOwner ? t('ro.owner') : t(u.role === 'admin' ? 'au.role.admin' : 'au.role.user')}
                       </span>
                     </p>
                     <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">

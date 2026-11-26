@@ -8,6 +8,9 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { I18nProvider } from '@/components/i18n-provider'
 import { CartProvider } from '@/components/cart-provider'
 import { Toaster } from '@/components/ui/sonner'
+import { cookies } from 'next/headers'
+import { AnnouncementBanner, ANNOUNCEMENT_COOKIE } from '@/components/announcement-banner'
+import { getActiveAnnouncement } from '@/lib/announcement'
 import { getI18n } from '@/lib/i18n/server'
 import './globals.css'
 
@@ -48,7 +51,9 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  const { locale, dir, messages } = await getI18n()
+  const [{ locale, dir, messages }, announcement, cookieStore] = await Promise.all([getI18n(), getActiveAnnouncement(), cookies()])
+  const dismissed = cookieStore.get(ANNOUNCEMENT_COOKIE)?.value
+  const showAnnouncement = announcement && dismissed !== announcement.id ? announcement : null
 
   return (
     <html
@@ -61,6 +66,7 @@ export default async function RootLayout({
         <ThemeProvider>
           <I18nProvider locale={locale} messages={messages}>
             <CartProvider>
+              {showAnnouncement && <AnnouncementBanner key={showAnnouncement.id} id={showAnnouncement.id} text={showAnnouncement.text} />}
               <SiteHeader />
               <main className="flex-1">{children}</main>
               <SiteFooter />

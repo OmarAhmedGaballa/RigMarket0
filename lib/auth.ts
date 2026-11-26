@@ -12,13 +12,47 @@ export const auth = betterAuth({
         : process.env.V0_RUNTIME_URL),
   emailAndPassword: {
     enabled: true,
-    autoSignIn: true,
+    // Accounts must verify their email with the 6-digit code before they can sign in (see lib/verification.ts).
+    requireEmailVerification: true,
+    autoSignIn: false,
+  },
+  // Verification emails are sent by our own code flow (6-digit code), not by better-auth's link emails.
+  emailVerification: {
+    sendOnSignUp: false,
+    sendOnSignIn: false,
+    sendVerificationEmail: async () => {},
+  },
+  // Google / Facebook sign-in. A button only appears when its keys are set in the environment.
+  socialProviders: {
+    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+      ? { google: { clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET } }
+      : {}),
+    ...(process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET
+      ? {
+          facebook: {
+            clientId: process.env.FACEBOOK_APP_ID,
+            clientSecret: process.env.FACEBOOK_APP_SECRET,
+            // Facebook already verified the identity, so no email code is needed.
+            mapProfileToUser: () => ({ emailVerified: true }),
+          },
+        }
+      : {}),
+  },
+  // Same email on password + Google/Facebook = one account instead of a duplicate.
+  account: {
+    accountLinking: { enabled: true, trustedProviders: ['google', 'facebook'] },
   },
   user: {
     additionalFields: {
       role: {
         type: 'string',
         defaultValue: 'user',
+        input: false,
+      },
+      // The primary admin: the only admin who can promote other accounts to admin.
+      isOwner: {
+        type: 'boolean',
+        defaultValue: false,
         input: false,
       },
     },
@@ -34,6 +68,13 @@ export const auth = betterAuth({
           )
           const role = rows[0]?.count === '0' ? 'admin' : 'user'
           return { data: { ...newUser, role } }
+        },
+        // The very first admin of a brand-new site is also the primary admin (existing sites get it from the migration).
+        after: async (created) => {
+          await pool.query(
+            `UPDATE "user" SET "isOwner" = true WHERE "id" = $1 AND "role" = 'admin' AND NOT EXISTS (SELECT 1 FROM "user" WHERE "isOwner" = true)`,
+            [created.id],
+          )
         },
       },
     },
@@ -60,7 +101,8 @@ export const auth = betterAuth({
       : []),
   ],
   session: {
-    expiresIn: 60 * 60 * 24 * 7,
+    // "Remember me" keeps you signed in for 30 days; without it the session ends when the browser closes.
+    expiresIn: 60 * 60 * 24 * 30,
     updateAge: 60 * 60 * 24,
   },
   ...(process.env.NODE_ENV === 'development'

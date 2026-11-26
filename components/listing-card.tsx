@@ -20,6 +20,11 @@ export async function ListingCard({ listing }: { listing: PublicListing }) {
           listing={listing}
           className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
         />
+        {!soldOut && listing.originalPrice !== null && listing.originalPrice > listing.price && (
+          <span className="absolute end-2 top-2 rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
+            -{Math.round((1 - listing.price / listing.originalPrice) * 100)}%
+          </span>
+        )}
         {soldOut && (
           <span className="absolute start-2 top-2 rounded-full bg-background/90 px-2 py-0.5 text-xs font-medium">
             {t('listing.soldOut')}
@@ -37,7 +42,12 @@ export async function ListingCard({ listing }: { listing: PublicListing }) {
           </Link>
         </h3>
         <div className="mt-auto flex items-end justify-between gap-2 pt-2">
-          <span className="font-mono text-lg font-semibold text-primary">{formatPrice(listing.price, locale)}</span>
+          <span className="flex flex-col">
+            {listing.originalPrice !== null && listing.originalPrice > listing.price && (
+              <span className="font-mono text-xs text-muted-foreground line-through">{formatPrice(listing.originalPrice, locale)}</span>
+            )}
+            <span className="font-mono text-lg font-semibold text-primary">{formatPrice(listing.price, locale)}</span>
+          </span>
           {listing.location && (
             <span className="flex items-center gap-1 truncate text-xs text-muted-foreground">
               <MapPin className="size-3" aria-hidden="true" />

@@ -1,5 +1,16 @@
 # What changed
 
+## Newest update  (run `pnpm db:migrate` first, then set the new variables in `.env.example`)
+
+1. **Sellers can edit quantity / mark Sold out** (My ads > each ad). Quantity 0 = Sold out; set a number again to put it back.
+2. **Admin announcement bar**: Admin > Settings > "Site announcement". Shows at the top of every page for 24 hours, then disappears by itself. Visitors can close it. Admin writes any text.
+3. **Seller discounts** (live ads only). The new price must be LOWER than the current one (checked on the server, so it cannot be raised). Buyers see the old price crossed out + a % badge. "End discount" returns to the price the ad had before the discount, never above it. The commission is still added on top of the seller's new price.
+4. **Seller can delete their ad**: this already existed (trash icon); it is now a clear "Delete" button with a confirmation.
+5. **Primary admin**: the oldest admin account that exists when you run the migration becomes the primary admin. Only it can make other accounts admin (Admin > Accounts > open an account > Admin access) and can take it back. Admins it promotes cannot promote anyone, and cannot reset an admin's password. The primary admin cannot be changed.
+6. **Email verification code**: new accounts get a 6-digit code by email (10 min, max 5 wrong tries, resend every 60s, 6 per hour). Unverified accounts cannot sign in; trying to sign in sends a new code. Existing accounts are marked verified by the migration so nobody is locked out. **Remember me** (checked by default): stay signed in 30 days; unchecked = signed out when the browser closes.
+7. **Google + Facebook sign-in** (buttons show only when their keys are set). Same email = same account. Both are treated as already verified.
+8. **Legal pages**: /privacy, /terms, /data-deletion (English + Arabic, with rigmarket0@gmail.com), linked from the footer and the sign-up form.
+
 ## Latest update
 Run `pnpm db:migrate` again first (adds the commission setting and new columns; safe to repeat).
 

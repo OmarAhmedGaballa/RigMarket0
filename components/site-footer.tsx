@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { MessageCircle } from 'lucide-react'
 import { CATEGORIES, categoryName } from '@/lib/categories'
-import { SUPPORT_WHATSAPP_DISPLAY, whatsappLink } from '@/lib/config'
+import { SUPPORT_EMAIL, SUPPORT_WHATSAPP_DISPLAY, whatsappLink } from '@/lib/config'
 import { getI18n } from '@/lib/i18n/server'
 import { buttonVariants } from '@/components/ui/button'
 
@@ -38,6 +38,17 @@ export async function SiteFooter() {
             <MessageCircle aria-hidden="true" />
             {t('footer.support.cta')}
           </a>
+        </div>
+      </div>
+      <div className="border-t">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 py-4 text-sm text-muted-foreground md:px-6">
+          <p>© {new Date().getFullYear()} RigMarket</p>
+          <nav aria-label={t('legal.nav')} className="flex flex-wrap gap-x-5 gap-y-1">
+            <Link href="/privacy" className="hover:text-foreground">{t('legal.privacy')}</Link>
+            <Link href="/terms" className="hover:text-foreground">{t('legal.terms')}</Link>
+            <Link href="/data-deletion" className="hover:text-foreground">{t('legal.dataDeletion')}</Link>
+            <a href={`mailto:${SUPPORT_EMAIL}`} dir="ltr" className="hover:text-foreground">{SUPPORT_EMAIL}</a>
+          </nav>
         </div>
       </div>
     </footer>

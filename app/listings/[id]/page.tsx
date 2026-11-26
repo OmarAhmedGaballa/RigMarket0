@@ -72,7 +72,17 @@ export default async function ListingDetailPage({ params }: { params: Promise<{ 
             </p>
             <h1 className="mt-1 text-3xl font-semibold tracking-tight text-balance">{listing.title}</h1>
           </div>
-          <p className="font-mono text-3xl font-semibold text-primary">{formatPrice(listing.price, locale)}</p>
+          <p className="flex flex-wrap items-baseline gap-3">
+            <span className="font-mono text-3xl font-semibold text-primary">{formatPrice(listing.price, locale)}</span>
+            {listing.originalPrice !== null && listing.originalPrice > listing.price && (
+              <>
+                <span className="font-mono text-lg text-muted-foreground line-through">{formatPrice(listing.originalPrice, locale)}</span>
+                <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
+                  -{Math.round((1 - listing.price / listing.originalPrice) * 100)}%
+                </span>
+              </>
+            )}
+          </p>
 
           {purchasable && (
             <div className="flex flex-col gap-3">
