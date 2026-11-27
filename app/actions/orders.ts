@@ -99,7 +99,7 @@ export async function placeOrder(_prev: FormState, formData: FormData): Promise<
         .where(inArray(listings.id, ids))
         .orderBy(asc(listings.id))
         .for('update')
-      const byId = new Map(rows.map((r) => [r.id, r]))
+      const byId = new Map(rows.map((r) => [Number(r.id), r]))
 
       let total = 0
       console.log('PLACE_ORDER_DEBUG:', {
@@ -108,7 +108,7 @@ export async function placeOrder(_prev: FormState, formData: FormData): Promise<
   rows: rows.map((r) => ({ id: r.id, status: r.status, title: r.title, stock: r.stock })),
 })
       for (const line of lines) {
-        const row = byId.get(line.id)
+        const row = byId.get(Number(line.id))
         if (!row || row.status !== 'approved') {
           throw new OrderError(t('err.cartUnavailable', { title: row?.title ?? `#${line.id}` }))
         }
