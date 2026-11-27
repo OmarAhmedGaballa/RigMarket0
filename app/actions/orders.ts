@@ -102,6 +102,11 @@ export async function placeOrder(_prev: FormState, formData: FormData): Promise<
       const byId = new Map(rows.map((r) => [r.id, r]))
 
       let total = 0
+      console.log('PLACE_ORDER_DEBUG:', {
+  ids,
+  rowsCount: rows.length,
+  rows: rows.map((r) => ({ id: r.id, status: r.status, title: r.title, stock: r.stock })),
+})
       for (const line of lines) {
         const row = byId.get(line.id)
         if (!row || row.status !== 'approved') {
